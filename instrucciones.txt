@@ -1,0 +1,640 @@
+!SWITCH VLAN
+
+enable
+configure terminal
+
+! Crear VLAN 50 - PRODUCTION
+vlan 50
+name PRODUCTION
+exit
+
+! Crear VLAN 60 - MARKETING
+vlan 60
+name MARKETING
+exit
+
+! Crear VLAN 100 - MANAGEMENT (nativa y de administración)
+vlan 100
+name MANAGEMENT
+exit
+
+! Puertos 1-10 → VLAN 50 (PRODUCTION)
+interface range fastEthernet 0/1 - 10
+switchport mode access
+switchport access vlan 50
+exit
+
+! Puertos 11-19 → VLAN 60 (MARKETING)
+interface range fastEthernet 0/11 - 19
+switchport mode access
+switchport access vlan 60
+exit
+
+! Puerto que conecta al Multilayer Switch (ej: fa0/24)
+interface fastEthernet 0/24
+switchport mode trunk
+switchport trunk native vlan 100
+switchport trunk allowed vlan 50,60,100
+exit
+
+!SWITCH CENTRAL
+
+enable
+conf terminal
+ip routing
+
+! SVI VLAN 60 - MARKETING (730 hosts)
+interface vlan 60
+ip address 10.10.0.1 255.255.252.0
+no shutdown
+exit
+
+! SVI VLAN 50 - PRODUCTION (350 hosts)
+interface vlan 50
+ip address 10.10.4.1 255.255.254.0
+no shutdown
+exit
+
+! SVI VLAN 100 - MANAGEMENT (nativa)
+interface vlan 100
+ip address 10.10.6.1 255.255.255.0
+no shutdown
+exit
+
+!SWITCH VLAN
+
+show vlan brief
+show interfaces trunk
+show running-config
+
+
+PC1 — VLAN 60 (MARKETING)
+IP:       10.10.0.1
+Máscara:  255.255.252.0
+Gateway:  10.10.0.1
+
+
+PC0 — VLAN 50 (PRODUCTION)
+IP:       10.10.4.0
+Máscara:  255.255.254.0
+Gateway:  10.10.4.1
+
+
+
+
+BGP -----------------------------------------------------------
+
+!LONDON
+
+enable
+configure terminal
+
+! IP hacia NEW_YORK
+interface GigabitEthernet0/1/0
+ip address 199.0.0.9 255.255.255.252
+no shutdown
+exit
+
+! BGP
+router bgp 200
+neighbor 199.0.0.10 remote-as 300
+network 199.0.0.8 mask 255.255.255.252
+exit
+
+
+
+!NEW YOLK
+enable
+configure terminal
+
+interface GigabitEthernet0/0/0
+ ip address 199.0.0.10 255.255.255.252
+ no shutdown
+ exit
+
+interface GigabitEthernet0/1/0
+ ip address 199.0.0.13 255.255.255.252
+ no shutdown
+ exit
+
+router bgp 300
+ neighbor 199.0.0.9 remote-as 200
+ neighbor 199.0.0.14 remote-as 400
+ network 199.0.0.8 mask 255.255.255.252
+ network 199.0.0.12 mask 255.255.255.252
+ exit
+
+
+!TOKYO
+
+enable
+configure terminal
+
+interface GigabitEthernet0/0/0
+ ip address 199.0.0.14 255.255.255.252
+ no shutdown
+ exit
+
+router bgp 400
+ neighbor 199.0.0.13 remote-as 300
+ network 199.0.0.12 mask 255.255.255.252
+ exit
+
+
+
+OSPF -----------------------------------
+
+
+!CENTRAL
+
+!configurar la ip con la LONDON
+enable
+configure terminal
+
+interface GigabitEthernet1/1/4
+ no switchport
+ ip address 199.0.0.1 255.255.255.248
+ no shutdown
+ exit
+
+enable
+configure terminal
+
+router ospf 1
+ network 199.0.0.0 0.0.0.7 area 0
+ network 10.10.0.0 0.0.3.255 area 0
+ network 10.10.4.0 0.0.1.255 area 0
+ network 10.10.6.0 0.0.0.255 area 0
+ exit
+
+!LONDON
+enable
+configure terminal
+
+router ospf 1
+ network 199.0.0.0 0.0.0.7 area 0
+ network 199.0.0.8 0.0.0.3 area 0
+ exit
+
+OSPF-BGP ---------------------------------------------------------
+
+!NEW YOLK
+enable
+configure terminal
+
+router ospf 1
+ network 199.0.0.8 0.0.0.3 area 0
+ network 199.0.0.12 0.0.0.3 area 0
+ redistribute bgp 300 subnets
+ exit
+
+router bgp 300
+ redistribute ospf 1
+ exit
+
+
+TOKYO-CLOUD ---------------------------------------------------------
+
+
+!TOKYO
+
+enable
+configure terminal
+
+interface GigabitEthernet0/1/0
+ ip address 200.0.0.1 255.255.255.248
+ no shutdown
+ exit
+
+enable
+configure terminal
+
+router bgp 400
+ network 0.0.0.0 mask 0.0.0.0
+ network 200.0.0.0 mask 255.255.255.248
+ exit
+
+router bgp 400
+ redistribute static
+ exit
+
+!CLOUD
+
+enable
+configure terminal
+
+interface GigabitEthernet 0/0/0
+ ip address 200.0.0.2 255.255.255.248
+ no shutdown
+ exit
+
+
+SUMARIZADA -------------------------------------------------
+
+!NEW YOLK
+
+
+
+enable
+configure terminal
+
+router ospf 1
+ redistribute static subnets
+ exit
+
+
+
+! confirmar
+
+CENTRAL# show ip route
+Debes ver:
+O E2  10.10.0.0/21 via 199.0.0.10 
+
+
+DHCP LONDON ----------------------------------------
+
+
+
+
+!LONDON
+
+enable
+configure terminal
+
+ip route 10.10.4.0 255.255.254.0 199.0.0.1
+ip route 10.10.0.0 255.255.252.0 199.0.0.1
+ip route 10.10.6.0 255.255.255.0 199.0.0.1
+exit
+
+
+enable
+configure terminal
+
+ip dhcp excluded-address 10.10.4.1 10.10.4.10
+ip dhcp excluded-address 10.10.0.1 10.10.0.10
+
+ip dhcp pool VLAN50
+ network 10.10.4.0 255.255.254.0
+ default-router 10.10.4.1
+ dns-server 10.10.4.1
+ exit
+
+ip dhcp pool VLAN60
+ network 10.10.0.0 255.255.252.0
+ default-router 10.10.0.1
+ dns-server 10.10.0.1
+ exit
+
+!CENTAL
+
+enable
+configure terminal
+
+router ospf 1
+ network 10.10.0.0 0.0.3.255 area 0
+ network 10.10.4.0 0.0.1.255 area 0
+ network 10.10.6.0 0.0.0.255 area 0
+ exit
+
+
+enable
+configure terminal
+
+interface vlan 50
+ ip helper-address 199.0.0.2
+ exit
+
+interface vlan 60
+ ip helper-address 199.0.0.2
+ exit
+
+enable
+configure terminal
+
+router ospf 1
+ no network 10.10.0.0 0.0.3.255 area 0
+ no network 10.10.4.0 0.0.1.255 area 0
+ no network 10.10.6.0 0.0.0.255 area 0
+ network 10.10.0.1 0.0.0.0 area 0
+ network 10.10.4.1 0.0.0.0 area 0
+ network 10.10.6.1 0.0.0.0 area 0
+ exit
+
+
+
+EXCLUIR IPS --------------------------------
+enable
+configure terminal
+
+ip dhcp excluded-address 10.10.4.1 10.10.4.20
+ip dhcp excluded-address 10.10.0.1 10.10.0.20
+
+exit
+
+DNS server1 --------------------------------
+
+!LONDON
+enable
+configure terminal
+
+interface GigabitEthernet0/0
+ ip address 172.20.0.193 255.255.255.224
+ no shutdown
+ exit
+
+router ospf 1
+ network 172.20.0.192 0.0.0.31 area 0
+ exit
+
+
+
+!LONDON
+
+enable
+configure terminal
+
+ip dhcp pool VLAN50
+ dns-server 172.20.0.194
+ exit
+
+ip dhcp pool VLAN60
+ dns-server 172.20.0.194
+ exit
+
+
+
+!SERVER1
+
+
+Click en Server1
+Desktop → IP Configuration
+IP:      172.20.0.194
+Máscara: 255.255.255.224
+Gateway: 172.20.0.193
+
+1. Click en Server1
+2. Pestaña Services
+3. Click en DNS
+4. DNS Service: ON
+5. Agregar registro:
+   Name:    technology.com
+   Type:    A Record
+   Address: 172.20.0.194
+6. Click Add
+7. Click Save
+
+PC0:
+Desktop → IP Configuration
+DNS Server: 172.20.0.194
+
+PC1:
+Desktop → IP Configuration
+DNS Server: 172.20.0.194
+
+Configurar SSH en NEW_YORK. ====================
+
+!NEW YOLK
+
+enable
+configure terminal
+
+ip domain-name technology.com
+
+username admin secret cisco123
+
+crypto key generate rsa
+! Nota: Ingresa 1024 cuando el router solicite el tamaño de los módulos.
+1024
+ip ssh version 2
+
+line vty 0 4
+ transport input ssh
+ login local
+ exit
+
+show ip ssh
+
+
+1. Click en PC0
+2. Desktop → SSH
+3. Llena los campos:
+   IP Address: 199.0.0.10
+   Username:   admin
+   Password:   cisco123
+4. Click Connect
+
+
+
+Configurar servicio de correo en Server1 ------------------------------------------
+
+!LAN3
+interface GigabitEthernet0/0
+ no ip address
+ exit
+
+! Subinterfaz para la primera red (VLAN 50 por ejemplo)
+interface GigabitEthernet0/0.50
+ encapsulation dot1Q 50
+ ip address 172.20.0.1 255.255.255.128
+ exit
+
+! Subinterfaz para otra red (VLAN 60)
+interface GigabitEthernet0/0.60
+ encapsulation dot1Q 60
+ ip address 10.10.0.1 255.255.252.0
+ exit
+
+conf terminal
+router ospf 1
+ network 172.20.0.0 0.0.0.127 area 0
+ exit
+
+
+!SERVER2
+172.20.0.2 
+255.255.255.128
+
+
+!TOKYO
+
+interface GigabitEthernet0/0
+ ip address 172.20.0.129 255.255.255.192
+ no shutdown
+ exit
+
+router ospf 1
+ network 172.20.0.128 0.0.0.63 area 0
+ exit
+
+
+!PC2
+
+conf 172.20.0.130 255.255.255.192
+gateway 172.20.0.129 
+
+1. Click en Server1
+2. Pestaña Services
+3. Click en EMAIL
+4. Activar SMTP: ON
+5. Activar POP3: ON
+6. Domain Name: technology.com
+7. Click Set
+8. Crear usuarios:
+   Username: pc0
+   Password: cisco123
+   Click + (agregar)
+   
+   Username: laptop
+   Password: cisco123
+   Click +
+9. Click Save
+
+
+1. Click en PC0
+2. Desktop → Email
+3. Llenar campos:
+   Your Name:    PC0
+   Email Address: pc0@technology.com
+   Incoming Mail Server: 172.20.0.2
+   Outgoing Mail Server: 172.20.0.2
+   Username: pc0
+   Password: cisco123
+4. Click Save
+
+
+
+1. Click en Laptop0
+2. Desktop → Email
+3. Llenar campos:
+   Your Name:    Laptop
+   Email Address: laptop@technology.com
+   Incoming Mail Server: 172.20.0.194
+   Outgoing Mail Server: 172.20.0.194
+   Username: laptop
+   Password: cisco123
+4. Click Save
+
+
+
+
+1. Click en Wireless Router0
+2. Pestaña GUI
+3. Setup → Basic Setup:
+   Internet IP: 172.20.0.133  (IP en LAN4)
+   Subnet Mask: 255.255.255.192
+   Gateway:     172.20.0.129
+4. Network Setup:
+   Router IP:   10.1.1.1
+   Subnet Mask: 255.255.255.128
+5. DHCP Server: Enabled
+   Start IP:    10.1.1.2
+   Max users:   100
+6. Click Save Settings
+
+!TOKYO
+enable
+configure terminal
+ip route 10.1.1.0 255.255.255.128 172.20.0.133
+exit
+
+
+enable
+configure terminal
+
+! Configuración BGP (AS 400)
+router bgp 400
+ network 172.20.0.128 mask 255.255.255.192
+ exit
+
+! Configuración OSPF
+router ospf 1
+ network 172.20.0.128 0.0.0.63 area 0
+ exit
+
+1. Desktop → Email
+2. Click Compose
+3. To: laptop@technology.com
+4. Subject: Prueba
+5. Body: Hola desde PC0
+6. Click Send
+
+
+
+1. Desktop → Email
+2. Click Receive
+3. Debe aparecer el correo de PC0 
+
+
+ NAT con Pool, lista y sobrecarga en TOKYO --------------------------------------------------
+enable
+configure terminal
+
+! ACL para identificar el tráfico interno (VLAN 50 y 60)
+access-list 1 permit 10.10.0.0 0.0.3.255
+access-list 1 permit 10.10.4.0 0.0.1.255
+
+! Pool de IPs públicas según tu tabla (Red 200.0.0.0/29)
+ip nat pool NATPOOL 200.0.0.3 200.0.0.6 netmask 255.255.255.248
+
+! Activar PAT (asociar lista con pool + overload)
+ip nat inside source list 1 pool NATPOOL overload
+
+! Interfaz de ENTRADA (Hacia NEW_YORK/Red Interna)
+interface GigabitEthernet0/0/0
+ ip nat inside
+ exit
+
+! Interfaz de SALIDA (Hacia la CLOUD/Internet)
+interface GigabitEthernet0/1/0
+ ip nat outside
+ exit
+
+
+=====================================================================
+a. Cambiar el SSID por su APELLIDO 
+b. Implementar la seguridad WPA2 
+c. Realizar filtrado por MAC, para incrementar la seguridad 
+
+
+Paso 1 — Acceder al Wireless Router
+1. Click en Wireless Router0
+2. Pestaña GUI
+
+Paso 2 — Cambiar SSID
+1. GUI → Wireless
+2. Basic Wireless Settings
+3. Busca "Network Name (SSID)"
+4. Borra el nombre actual
+5. Escribe TU_APELLIDO
+6. Click Save Settings
+
+Paso 3 — Implementar WPA2
+1. GUI → Wireless
+2. Wireless Security
+3. Security Mode: WPA2 Personal
+4. Encryption: AES
+5. Passphrase: cisco123
+6. Click Save Settings
+
+Paso 4 — Filtrado por MAC
+1. GUI → Wireless
+2. Wireless MAC Filter
+3. Wireless MAC Filter: Enable
+4. Prevent: "Permit PCs listed below to access wireless network"
+5. Agregar MAC de Laptop0:
+   - Click en Laptop0
+   - Config → Wireless
+   - Copia la MAC address
+6. Pega la MAC en el filtro
+7. Click Save Settings
+
+Paso 5 — Conectar Laptop0
+1. Click en Laptop0
+2. Config → Wireless0
+3. SSID: TU_APELLIDO
+4. Authentication: WPA2-PSK
+5. PSK Pass Phrase: cisco123
+
+Verificar
+1. Laptop0 debe obtener IP automáticamente
+2. Desktop → IP Configuration
