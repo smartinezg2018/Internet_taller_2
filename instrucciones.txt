@@ -565,7 +565,8 @@ router ospf 1
 3. Debe aparecer el correo de PC0 
 
 
- NAT con Pool, lista y sobrecarga en TOKYO --------------------------------------------------
+NAT con Pool, lista y sobrecarga en TOKYO --------------------------------------------------
+
 enable
 configure terminal
 
@@ -638,3 +639,207 @@ Paso 5 — Conectar Laptop0
 Verificar
 1. Laptop0 debe obtener IP automáticamente
 2. Desktop → IP Configuration
+
+Solucionar CDP Native VLAN Mismatch ----------------------------------
+
+!CENTRAL
+enable
+configure terminal
+
+interface GigabitEthernet1/0/1
+ switchport trunk native vlan 100
+ exit
+
+! Verificación: ahora Gig1/0/1 tiene Native vlan 100
+show interfaces trunk
+
+=====================================================================
+
+Implementar IPv6 (Dual Stack) en los equipos de la topología menos en los switches capa 2 ni en el router inalámbrico.
+
+IPv6 para Routers ----------------------------------------------
+
+!CENTRAL
+! Activar routing IPv6
+enable
+configure terminal
+ipv6 unicast-routing
+
+! Interfaz WAN hacia LONDON
+interface GigabitEthernet1/1/4
+ ipv6 address 2001:DB8:A::1/64
+ no shutdown
+ exit
+
+! SVIs de las VLANs
+interface vlan 60
+ ipv6 address 2001:DB8:1::1/64
+ no shutdown
+ exit
+
+interface vlan 50
+ ipv6 address 2001:DB8:2::1/64
+ no shutdown
+ exit
+
+! Verificación CENTRAL
+show ipv6 interface brief
+
+
+!LONDON
+! Activar routing IPv6
+enable
+configure terminal
+ipv6 unicast-routing
+
+! Interfaz hacia CENTRAL
+interface GigabitEthernet0/0/0
+ ipv6 address 2001:DB8:A::2/64
+ no shutdown
+ exit
+
+! Interfaz hacia NEW_YORK
+interface GigabitEthernet0/1/0
+ ipv6 address 2001:DB8:B::1/64
+ no shutdown
+ exit
+
+! Interfaz hacia Server1
+interface GigabitEthernet0/0
+ ipv6 address 2001:DB8:6::1/64
+ no shutdown
+ exit
+
+! Verificación LONDON
+show ipv6 interface brief
+
+
+!NEW_YORK
+! Activar routing IPv6
+enable
+configure terminal
+ipv6 unicast-routing
+
+! Interfaz hacia LONDON
+interface GigabitEthernet0/0/0
+ ipv6 address 2001:DB8:B::2/64
+ no shutdown
+ exit
+
+! Interfaz hacia TOKYO
+interface GigabitEthernet0/1/0
+ ipv6 address 2001:DB8:C::1/64
+ no shutdown
+ exit
+
+! Interfaz hacia Server2
+interface GigabitEthernet0/0
+ ipv6 address 2001:DB8:4::1/64
+ no shutdown
+ exit
+
+! Verificación NEW_YORK
+show ipv6 interface brief
+
+
+!TOKYO
+! Activar routing IPv6
+enable
+configure terminal
+ipv6 unicast-routing
+
+! Interfaz hacia NEW_YORK
+interface GigabitEthernet0/0/0
+ ipv6 address 2001:DB8:C::2/64
+ no shutdown
+ exit
+
+! Interfaz hacia LAN4 (PC2)
+interface GigabitEthernet0/0
+ ipv6 address 2001:DB8:5::1/64
+ no shutdown
+ exit
+
+! Interfaz hacia CLOUD
+interface GigabitEthernet0/1/0
+ ipv6 address 2001:DB8:8::1/64
+ no shutdown
+ exit
+
+! Verificación TOKYO
+show ipv6 interface brief
+
+
+!CLOUD
+! Activar routing IPv6 e Interfaz hacia TOKYO
+enable
+configure terminal
+ipv6 unicast-routing
+
+interface GigabitEthernet0/0/0
+ ipv6 address 2001:DB8:8::2/64
+ no shutdown
+ exit
+
+! Verificación CLOUD
+show ipv6 interface brief
+
+
+IPv6 para Dispositivos finales ----------------------------------------------
+
+!PC0 - VLAN50
+Click en PC0
+Desktop → IP Configuration
+
+IPv6 Address:  2001:DB8:2::10
+Subnet Prefix: 64
+IPv6 Gateway:  2001:DB8:2::1
+
+
+!PC1 — VLAN60
+Click en PC1
+Desktop → IP Configuration
+
+IPv6 Address:  2001:DB8:1::10
+Subnet Prefix: 64
+IPv6 Gateway:  2001:DB8:1::1
+
+
+!PC2 — LAN4
+Click en PC2
+Desktop → IP Configuration
+
+IPv6 Address:  2001:DB8:5::10
+Subnet Prefix: 64
+IPv6 Gateway:  2001:DB8:5::1
+
+
+!Server1 — RED SERVER1
+Click en Server1
+Desktop → IP Configuration
+
+IPv6 Address:  2001:DB8:6::10
+Subnet Prefix: 64
+IPv6 Gateway:  2001:DB8:6::1
+
+
+!Server2 — LAN3
+Click en Server2
+Desktop → IP Configuration
+
+IPv6 Address:  2001:DB8:4::10
+Subnet Prefix: 64
+IPv6 Gateway:  2001:DB8:4::1
+
+
+! Pruebas de ping ipv6:
+PC0    → ping 2001:DB8:2::1   (gateway CENTRAL vlan50)
+PC1    → ping 2001:DB8:1::1   (gateway CENTRAL vlan60)
+PC2    → ping 2001:DB8:5::1   (gateway TOKYO)
+Server1→ ping 2001:DB8:6::1   (gateway LONDON)
+Server2→ ping 2001:DB8:4::1   (gateway NEW_YORK)
+
+
+=====================================================================
+
+Habilitar el enrutamiento OSPFV3 en todos los router
