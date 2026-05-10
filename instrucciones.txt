@@ -843,3 +843,166 @@ Server2→ ping 2001:DB8:4::1   (gateway NEW_YORK)
 =====================================================================
 
 Habilitar el enrutamiento OSPFV3 en todos los router
+
+
+CENTRAL
+
+enable
+configure terminal
+ipv6 unicast-routing
+interface GigabitEthernet1/1/4
+ipv6 address 2001:DB8:A::1/64
+ipv6 ospf 1 area 0
+exit
+interface vlan 50
+ipv6 address 2001:DB8:2::1/64
+ipv6 ospf 1 area 0
+exit
+interface vlan 60
+ipv6 address 2001:DB8:1::1/64
+ipv6 ospf 1 area 0
+exit
+interface vlan 100
+ipv6 address 2001:DB8:3::1/64
+ipv6 ospf 1 area 0
+exit
+ipv6 router ospf 1
+router-id 1.1.1.1
+exit
+
+LONDON
+enable
+configure terminal
+ipv6 unicast-routing
+interface GigabitEthernet0/0/0
+ipv6 address 2001:DB8:A::2/64
+ipv6 ospf 1 area 0
+exit
+interface GigabitEthernet0/1/0
+ipv6 address 2001:DB8:B::1/64
+ipv6 ospf 1 area 0
+exit
+interface GigabitEthernet0/0
+ipv6 address 2001:DB8:6::1/64
+ipv6 ospf 1 area 0
+exit
+ipv6 router ospf 1
+router-id 2.2.2.2
+exit
+
+NEW YOKR
+
+enable
+configure terminal
+ipv6 unicast-routing
+interface GigabitEthernet0/0/0
+ipv6 address 2001:DB8:B::2/64
+ipv6 ospf 1 area 0
+exit
+interface GigabitEthernet0/1/0
+ipv6 address 2001:DB8:C::1/64
+ipv6 ospf 1 area 0
+exit
+interface GigabitEthernet0/0
+ipv6 address 2001:DB8:4::1/64
+ipv6 ospf 1 area 0
+exit
+ipv6 router ospf 1
+router-id 3.3.3.3
+exit
+
+TOKYO
+
+enable
+configure terminal
+ipv6 unicast-routing
+interface GigabitEthernet0/0/0
+ipv6 address 2001:DB8:C::2/64
+ipv6 ospf 1 area 0
+exit
+interface GigabitEthernet0/1/0
+ipv6 address 2001:DB8:8::1/64
+ipv6 ospf 1 area 0
+exit
+interface GigabitEthernet0/0
+ipv6 address 2001:DB8:5::1/64
+ipv6 ospf 1 area 0
+exit
+ipv6 router ospf 1
+router-id 4.4.4.4
+exit
+
+
+
+CONFIRMAR
+## Verificación completa de OSPFv3
+
+### Paso 1 — Ver vecinos OSPFv3 en cada router
+
+```bash
+show ipv6 ospf neighbor
+```
+
+Debes ver algo así en LONDON:
+```
+Neighbor ID   State   Interface
+1.1.1.1       FULL    Gig0/0/0  ✅ ← CENTRAL
+3.3.3.3       FULL    Gig0/1/0  ✅ ← NEW_YORK
+```
+
+---
+
+### Paso 2 — Ver rutas IPv6 aprendidas
+
+```bash
+show ipv6 route ospf
+```
+
+Debes ver rutas con **O**:
+```
+O  2001:DB8:A::/64 via ... ✅
+O  2001:DB8:B::/64 via ... ✅
+O  2001:DB8:C::/64 via ... ✅
+```
+
+---
+
+### Paso 3 — Prueba de ping IPv6 entre routers
+
+Desde CENTRAL hacia LONDON:
+```bash
+CENTRAL# ping ipv6 2001:DB8:A::2
+```
+
+Desde LONDON hacia NEW_YORK:
+```bash
+LONDON# ping ipv6 2001:DB8:B::2
+```
+
+Desde NEW_YORK hacia TOKYO:
+```bash
+NEW_YORK# ping ipv6 2001:DB8:C::2
+```
+
+---
+
+### Paso 4 — Prueba de extremo a extremo
+
+Desde PC0 hacia PC1:
+```
+PC0> ping 2001:DB8:1::10
+```
+
+Si responde ✅ **OSPFv3 está funcionando perfectamente.**
+
+---
+
+### Resultado esperado
+
+```
+CENTRAL ←→ LONDON    FULL ✅
+LONDON  ←→ NEW_YORK  FULL ✅
+NEW_YORK←→ TOKYO     FULL ✅
+```
+
+¿Qué resultado te da el `show ipv6 ospf neighbor` en cada router?
